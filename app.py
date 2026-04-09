@@ -19,7 +19,7 @@ try:
     WP_APP_PW = st.secrets["WP_APP_PW"]
     
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
 except KeyError:
     st.error("Secrets 설정 누락! Streamlit Cloud의 Secrets를 확인해주세요.")
 
