@@ -4,11 +4,12 @@ import requests
 import re
 import pandas as pd
 from io import BytesIO
+from PIL import Image
 
 # 1. 화면 설정 및 스타일
-st.set_page_config(page_title="안심이 통합 기획 비서", page_icon="🎯", layout="wide")
-st.title("🧪 안심이의 고도화 상품 연구소")
-st.subheader("심리 전략과 데이터가 결합된 1등 상세페이지 제작소 👓✨")
+st.set_page_config(page_title="안심이 비서 V2", page_icon="🕵️‍♂️", layout="wide")
+st.title("🧪 안심이의 고도화 상품 연구소 V2")
+st.subheader("이미지 분석 기능 탑재! 디테일까지 놓치지 않는 정밀 기획 👓✨")
 
 # 2. 비밀 정보 설정 (Streamlit Secrets)
 try:
@@ -18,7 +19,8 @@ try:
     WP_APP_PW = st.secrets["WP_APP_PW"]
     
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-flash-latest')
+    # 이미지 분석을 위해 gemini-1.5-flash 모델 사용
+    model = genai.GenerativeModel('gemini-1.5-flash')
 except KeyError:
     st.error("Secrets 설정이 누락되었습니다. Streamlit Cloud 설정에서 API 키들을 확인해주세요.")
 
@@ -26,16 +28,21 @@ except KeyError:
 if "plan_content" not in st.session_state:
     st.session_state.plan_content = ""
 
-# 4. 입력부 (사이드바 및 메인)
+# 4. 입력부
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/000000/dachshund.png")
-    st.markdown("### 🐾 수석 연구원 안심이")
-    st.info("💡 상품 정보와 심리 전략을 입력하면 안심이가 기획을 시작합니다.")
+    st.markdown("### 🐾 수석 연구원 안심이 V2")
+    st.info("💡 링크가 읽지 못하는 '방울' 같은 디테일은 사진을 직접 올려주세요!")
     
     source_type = st.selectbox("📦 공급처 선택", ["도매매", "오너클랜"])
     original_link = st.text_input("🔗 원본 상품 링크", placeholder="https://...")
     
-product_name = st.text_input("📝 분석할 상품명", placeholder="예: [PETLEAD 제외] 강아지 당근밭 노즈워크")
+    # --- 추가된 이미지 업로드 기능 ---
+    uploaded_file = st.file_uploader("📸 분석할 상세이미지 업로드 (방울 등 디테일 컷)", type=["jpg", "png", "jpeg"])
+    if uploaded_file:
+        st.image(uploaded_file, caption="안심이가 이 사진을 분석합니다.", use_column_width=True)
+
+product_name = st.text_input("📝 분석할 상품명", placeholder="예: [안심기획] 딸랑이 노즈워크 장난감")
 
 col_a, col_b = st.columns(2)
 with col_a:
@@ -43,54 +50,61 @@ with col_a:
                                  placeholder="예: 이탈률을 줄이는 첫 3초 시각적 주목도 전략 등", height=150)
 with col_b:
     product_spec = st.text_area("📏 상품 상세 스펙 (사이즈, 소재 등 필수)", 
-                               placeholder="예: 가로 20cm, 세로 15cm / 폴라폴리스 소재 / 손바닥 만한 크기", height=150)
+                               placeholder="예: 가로 20cm / 주황색 플라스틱 방울 포함 / 청각 자극 요소", height=150)
 
 # --- 기획 시작 버튼 ---
-if st.button("🚀 안심이 통합 기획 및 데이터 생성 시작!"):
+if st.button("🚀 안심이 정밀 분석 및 기획 시작!"):
     if not product_name:
         st.warning("상품명을 입력해주세요!")
     else:
-        with st.spinner("수석 연구원 안심이가 고객의 마음을 훔칠 8P 기획서를 작성 중입니다..."):
+        with st.spinner("수석 연구원 안심이가 이미지를 분석하고 기획서를 작성 중입니다..."):
             
-            # 안심이의 페르소나와 절대 규칙이 담긴 프롬프트
-            plan_prompt = f"""
+            # 메시지 구성 (이미지 포함 여부에 따라 다름)
+            content_list = []
+            
+            # 이미지 분석 가이드 포함
+            prompt_main = f"""
             너는 Magentalab 연구소의 수석 연구원, 닥스훈트 '안심이'야.
-            상품명 '{product_name}'에 전략 '{paper_strategy}'과 스펙 '{product_spec}'을 녹여낸 8P 상세페이지 기획서를 작성해.
+            상품명 '{product_name}'을 분석해. 
+            심리전략: '{paper_strategy}'
+            상세스펙: '{product_spec}'
+
+            [업로드된 이미지 분석 요청]
+            만약 이미지가 제공되었다면, 이미지 속의 특이점(예: 방울, 특수 소재, 디자인 디테일)을 반드시 파악해서 기획에 반영해. 
+            방울이 있다면 '청각적 자극'과 '호기심 유발'을 핵심 카피로 사용해.
 
             [절대 규칙]
-            1. **이미지 주인공:** 모든 연출 이미지에는 안심이(브라운 닥스훈트, 가운, 뿔테안경)가 반드시 등장해야 함.
-            2. **대표이미지 (썸네일):** 기획서 최상단에 1000x1000 픽셀 기준의 '상품 단독' 프롬프트를 작성해. 텍스트는 절대 넣지 마.
-            3. **사이즈 고정:** 상품 스펙({product_spec})을 엄격히 준수해. 실제 크기가 왜곡되지 않도록 주변 사물과 비교하는 묘사를 영문 프롬프트에 넣어.
-            4. **한글 카피 강제:** 모든 메인카피와 서브카피는 '무조건 한글'로만 작성해.
-            5. **심리 트리거:** 논문 전략({paper_strategy})을 직접적으로 언급하지 말고(예: '논문에 따르면' 금지), 자연스러운 카피와 구성으로 고객의 구매를 유도해.
-            6. **정보고시:** 8페이지는 반드시 안심이가 돋보기로 검수하는 이미지와 함께 '상품정보 고시' 표(Table)를 포함해. (확인 안되는 항목은 '상품 상단 표기'로 기재)
+            1. 모든 연출 이미지에는 안심이(브라운 닥스훈트, 가운, 뿔테안경)가 반드시 등장.
+            2. 대표이미지(1000x1000): 상품 단독 프롬프트 (No Text).
+            3. 사이즈 고정: {product_spec}을 참고해 왜곡 방지.
+            4. 한글 카피 강제: 메인/서브카피 무조건 한글.
+            5. 심리 트리거: 논문 전략({paper_strategy})을 이탈 방지용 카피로 승화.
+            6. 8P 정보고시: 안심이 검수 이미지 + 표 포함.
 
-            [페이지 구성]
-            - 대표이미지 전용 프롬프트 (No Text)
-            - 1P ~ 7P: 안심이의 행동 / 배경 / 한글 메인카피 / 한글 서브카피 / 영문 프롬프트(Flow용)
-            - 8P: 안심이의 검수 코멘트 / 영문 프롬프트 / 상품정보 고시 표
-
-            결과 형식 (구분자를 반드시 지킬 것):
-            ---PLAN---
-            (1~8페이지 내용)
+            ---PLAN--- (8페이지 분량)
             ---TITLE_TOSS---
-            토스용 상품명
             ---TITLE_ALWAYZ---
-            올웨이즈용 상품명
             """
             
+            content_list.append(prompt_main)
+            
+            # 파일이 업로드되었다면 이미지 객체를 리스트에 추가
+            if uploaded_file:
+                img = Image.open(uploaded_file)
+                content_list.append(img)
+            
             try:
-                response = model.generate_content(plan_prompt)
+                # 텍스트와 이미지를 동시에 모델에 전달 (멀티모달)
+                response = model.generate_content(content_list)
                 st.session_state.plan_content = response.text
-                st.success("✨ 안심이의 정밀 기획이 완료되었습니다!")
+                st.success("✨ 이미지를 포함한 정밀 기획이 완료되었습니다!")
             except Exception as e:
-                st.error(f"안심이가 연구 중에 오류를 발견했어요: {e}")
+                st.error(f"분석 오류 발생: {e}")
 
-# 5. 결과 표시 및 데이터 추출 (엑셀 & 워드프레스)
+# 5. 결과 표시 및 데이터 추출 (동일)
 if st.session_state.plan_content:
     st.divider()
     
-    # 데이터 추출 (Regex 사용)
     try:
         toss_title = st.session_state.plan_content.split("---TITLE_TOSS---")[1].split("---TITLE_ALWAYZ---")[0].strip()
         alwayz_title = st.session_state.plan_content.split("---TITLE_ALWAYZ---")[1].strip()
@@ -100,7 +114,6 @@ if st.session_state.plan_content:
 
     st.markdown("### 💾 마켓 등록용 데이터 및 전송")
     
-    # 엑셀 데이터 구성
     excel_data = {
         "공급처": [source_type],
         "원본링크": [original_link],
@@ -117,45 +130,16 @@ if st.session_state.plan_content:
     csv_file = df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
 
     btn_col1, btn_col2 = st.columns(2)
-    
     with btn_col1:
-        st.download_button(
-            label="📊 네이버/토스 등록용 CSV 다운로드",
-            data=csv_file,
-            file_name=f"market_upload_{product_name}.csv",
-            mime="text/csv",
-            help="이 파일을 다운로드하여 로봇이 읽을 수 있는 폴더에 넣어주세요."
-        )
+        st.download_button(label="📊 등록용 CSV 다운로드", data=csv_file, file_name=f"market_upload.csv", mime="text/csv")
 
     with btn_col2:
         if st.button("📦 워드프레스 작업대로 전송"):
             auth = (WP_USER, WP_APP_PW)
-            wp_body = f"""
-            <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px;">
-                <h2>🎯 마켓별 최적화 제목</h2>
-                <p><b>[네이버/토스]:</b> {toss_title}</p>
-                <p><b>[올웨이즈]:</b> {alwayz_title}</p>
-            </div>
-            <hr>
-            <h2>🔗 원본 상품 정보</h2>
-            <p><b>공급처:</b> {source_type} | <b>링크:</b> <a href='{original_link}'>{original_link}</a></p>
-            <hr>
-            {st.session_state.plan_content.replace('\n', '<br>')}
-            """
-            
-            payload = {
-                "title": f"[정밀기획] {product_name}",
-                "content": wp_body,
-                "status": "draft"
-            }
-            
+            wp_body = f"<h2>🎯 마켓 최적화 제목</h2><p>[네이버/토스]: {toss_title}</p><p>[올웨이즈]: {alwayz_title}</p><hr>{st.session_state.plan_content.replace('\n', '<br>')}"
+            payload = {"title": f"[V2-정밀기획] {product_name}", "content": wp_body, "status": "draft"}
             res = requests.post(WP_URL, auth=auth, json=payload)
-            if res.status_code == 201:
-                st.balloons()
-                st.success("워드프레스에 작업 지시서가 무사히 도착했습니다!")
-            else:
-                st.error("워드프레스 전송에 실패했습니다. 설정을 확인해주세요.")
+            if res.status_code == 201: st.balloons()
 
-    # 기획서 전문 보기
-    with st.expander("🔍 안심이의 8P 기획 전문 보기", expanded=True):
+    with st.expander("🔍 안심이의 V2 기획 전문 보기", expanded=True):
         st.write(st.session_state.plan_content)
